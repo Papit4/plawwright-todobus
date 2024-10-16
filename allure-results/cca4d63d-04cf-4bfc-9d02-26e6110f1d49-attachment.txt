@@ -1,0 +1,2 @@
+Mensaje de error para Usuario: * El campo es requerido
+Mensaje de error para Contraseña: * El campo es requerido

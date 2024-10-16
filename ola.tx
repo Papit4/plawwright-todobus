@@ -1,0 +1,137 @@
+test('Compra usuario logeado', async ({ page }) => {
+    await page.getByPlaceholder('Tu origen').click();
+    await page.locator('li').filter({ hasText: 'Kansas City, KS, (KS - TBC' }).click();
+    await page.locator('li').filter({ hasText: 'San Lucas, (MICH - Abarrotes-' }).click();
+    await page.getByLabel('Choose Miércoles Octubre 16 of').click();
+    //await page.getByLabel('Ida y vuelta').check();
+    await page.locator('#button-search-travel').click(); 
+
+
+    // Seleccionar el elemento y verificar que esté visible
+    const modal = page.locator('#modal-root div.sc-3aafa1c6-1.eQAEdj');
+    await expect(modal).toBeVisible();
+
+    await page.getByRole('button', { name: 'Aceptar' }).click();
+
+    // Localizar el contenedor padre de los resultados
+    const travelItemContainer = page.locator('article.travel-item-container').first();
+
+    // Asegurarse de que el contenedor del primer viaje esté visible
+    await expect(travelItemContainer).toBeVisible();
+
+    // Localizar el botón "Seleccionar" dentro del primer contenedor
+    const botonSeleccionar = travelItemContainer.locator('button:has-text("Seleccionar")');
+
+    // Hacer clic en el botón "Seleccionar"
+    await botonSeleccionar.click();
+
+    // Localizar todos los elementos que contienen información de las conexiones
+    const conexiones = page.locator('.chip-connection-travel p');
+
+    // Recorrer todas las conexiones y extraer sus textos
+    const totalConexiones = await conexiones.count();
+
+    // Recorrer todas las conexiones sumando 1 para incluir el primer vuelo
+    for (let i = 0; i < totalConexiones + 1; i++) {
+        if (i === 0) {
+            // El primer vuelo o compra (antes de las conexiones)
+            console.log('Primer vuelo o compra inicial.');
+        } else {
+            // Extraer el texto de las conexiones
+            const conexion = conexiones.nth(i - 1); // Aquí usamos "i - 1" para compensar el ajuste
+            const textoConexion = await conexion.textContent();
+            console.log(`Conexión ${i}: ${textoConexion}`);
+        }
+    }
+// Esperar a que los asientos se carguen
+await page.waitForSelector('[id^="seat-container-"]');
+
+// Obtener y evaluar los asientos directamente en el contexto de la página
+const seats = await page.evaluate(() => {
+  const seatElements = document.querySelectorAll('[id^="seat-container-"]');
+  return Array.from(seatElements).map((seat) => {
+    const computedStyle = window.getComputedStyle(seat);
+    // Verificar el color en el <p> interno, si existe
+    const pElement = seat.querySelector('p');
+    const pColor = pElement ? window.getComputedStyle(pElement).color : null;
+
+    return {
+      id: seat.id,
+      className: seat.className,
+      opacity: computedStyle.opacity,
+      cursor: computedStyle.cursor,
+      seatColor: pColor, // Color del <p> dentro del asiento
+      boundingRect: seat.getBoundingClientRect(),
+      innerHTML: seat.innerHTML, // HTML interno para depuración
+      outerHTML: seat.outerHTML  // HTML completo para depuración
+    };
+  });
+});
+
+if (seats.length === 0) {
+  console.error('No se encontraron asientos');
+} else {
+  console.log(`Total de asientos encontrados: ${seats.length}`);
+
+  for (const seat of seats) {
+    console.log(`Asiento:`, seat);
+
+    // Verificar si el asiento cumple los criterios de opacidad y color
+    if (seat.opacity === '1' && seat.seatColor === 'rgb(66, 135, 245)') {
+      console.log(`Asiento apto encontrado:`, seat);
+      // Si cumple las condiciones, puedes realizar la acción deseada (ej. hacer clic)
+      await page.click(`#${seat.id}`);
+      await page.click('#buttonNextView');
+
+      break;
+    } else {
+      console.log(`Asiento ${seat.id} no cumple con los criterios`);
+    }
+  }
+}
+
+
+
+});
+
+
+
+----
+import { test } from '@playwright/test';
+import { SearchPage } from '../PageObjects/SearchPage';
+import { FlightSelectionPage } from '../PageObjects/FlightSelectionPage';
+import { SeatSelectionPage } from '../PageObjects/SeatSelectionPage';
+
+test('Compra usuario logeado', async ({ page }) => {
+  const searchPage = new SearchPage(page);
+  const flightSelectionPage = new FlightSelectionPage(page);
+  const seatSelectionPage = new SeatSelectionPage(page);
+
+  // Selección de origen y destino
+  await searchPage.selectOrigin('Kansas City, KS, (KS - TBC');
+  await searchPage.selectDestination('San Lucas, (MICH - Abarrotes-');
+
+  // Establecer una fecha específica
+  await searchPage.setTravelDate('10/16/2024'); // Aquí puedes enviar la fecha que desees
+  
+  // Ejecutar la búsqueda
+  await searchPage.searchTravel();
+  await searchPage.acceptModal();
+
+  // Selección del primer vuelo y las conexiones
+  await flightSelectionPage.selectFirstFlight();
+  const totalConexiones = await flightSelectionPage.getConnectionCount();
+  
+  for (let i = 0; i <= totalConexiones; i++) {
+    if (i === 0) {
+      // Seleccionar asiento para el primer vuelo
+      await seatSelectionPage.selectAvailableSeat();
+      await seatSelectionPage.clickNextButton();
+    } else {
+      console.log(`Conexión ${i}`);
+      // Seleccionar asiento para cada conexión
+      await seatSelectionPage.selectAvailableSeat();
+      await seatSelectionPage.clickNextButton();
+    }
+  }
+});
